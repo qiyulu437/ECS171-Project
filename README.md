@@ -1,8 +1,6 @@
 # ECS171-Project
+by Qiyu Lu, Tran Vuong, Misha Nguyen, Abdel Rahman Ibrahim, Steven Yi
 
-Name: Qiyu Lu // put your name here
-
-Name : Tran Vuong
 
 #### Goal
 
