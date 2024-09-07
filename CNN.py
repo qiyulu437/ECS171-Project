@@ -85,7 +85,6 @@ def tune_hyperparameters(training, testing, cv):
             
     tuner.search(x_train, y_train, epochs = 16, validation_data = [x_test, y_test])
     best = tuner.get_best_models()[0]
-    best
 
 
 
