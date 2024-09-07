@@ -14,10 +14,18 @@ from keras.optimizers import Adam
 from scikeras.wrappers import KerasClassifier as KC
 
 from sklearn.model_selection import GridSearchCV as GSCV
+from sklearn.metrics import make_scorer, accuracy_score, precision_score, recall_score, f1_score
 
 import numpy as np
 
 
+
+scores = {
+        "accuracy": "accuracy",
+        "precision": make_scorer(precision_score),
+        "recall": make_scorer(recall_score),
+        "f1_score": make_scorer(f1_score)
+    }
 
 def build_model(lr, num_nodes, pool_size, kernel_size):
     # https://www.tensorflow.org/api_docs/python/tf/keras/preprocessing/image_dataset_from_directory
@@ -45,7 +53,7 @@ def build_model(lr, num_nodes, pool_size, kernel_size):
     return CNN
 
 def tune_hyperparameters(CNN, param_grid, training, n_jobs, cv):
-    grid = GSCV(estimator = CNN, param_grid = param_grid, n_jobs = n_jobs, cv = cv, scoring = ["accuracy", "precision", "recall", "f1"], refit = False)
+    grid = GSCV(estimator = CNN, param_grid = param_grid, n_jobs = n_jobs, cv = cv, refit = 'accuracy', scoring = scores)
 
     x = []
     y = []
