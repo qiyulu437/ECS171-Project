@@ -24,10 +24,12 @@ import numpy as np
 
 
 
-nodes = [6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40]
-kernel_size = [2, 3, 4, 5]
-pool_size = [3, 4, 5, 6]
-lr = [0.0000001, 0.000001, 0.00001, 0.0001, 0.001, 0.01]
+nodes = [28, 30, 32, 34]
+kernel_size = [2, 3, 4]
+pool_size = [4, 5, 6, 7]
+lr = [0.005, 0.006, 0.007, 0.008, 0.009]
+hidden_fcn = ["leaky_relu", "elu", "relu", "selu", "silu", "hard_silu", "relu6"]
+output_fcn = ["sigmoid", "hard_sigmoid"]
 
 weights = {0: 1.108, 1: 10.226}
 
@@ -44,7 +46,7 @@ def build_model_final(num_nodes, kern, pool, learn):
     CNN.add(layers.MaxPooling2D((pool, pool)))
     CNN.add(layers.Conv2D(num_nodes * 2, (kern, kern), activation = "leaky_relu", padding = "same"))
     CNN.add(layers.MaxPooling2D((pool, pool)))
-    CNN.add(layers.Conv2D(num_nodes * 4, (kern, kern), activation = "leaky_relu", padding = "same"))
+    CNN.add(layers.Conv2D(num_nodes * 3, (kern, kern), activation = "leaky_relu", padding = "same"))
 
     CNN.add(layers.Flatten())
     #CNN.add(layers.Dense(hp.Choice("nodes", nodes) * 2, activation = "leaky_relu"))
@@ -65,16 +67,25 @@ def build_model(hp):
     
     CNN = models.Sequential(name = "Waldo")
     CNN.add(layers.Input(shape = (256, 256, 3)))
-    CNN.add(layers.Conv2D(hp.Choice("nodes", nodes), (hp.Choice("kernel_size", kernel_size), hp.Choice("kernel_size", kernel_size)), activation = "leaky_relu", padding = "same"))
+    CNN.add(layers.Conv2D(hp.Choice("nodes", nodes), 
+                          (hp.Choice("kernel_size", kernel_size), hp.Choice("kernel_size", kernel_size)), 
+                          activation = hp.Choice("hidden_activation_function", hidden_fcn), 
+                          padding = "same"))
     CNN.add(layers.MaxPooling2D((hp.Choice("pool_size", pool_size), hp.Choice("pool_size", pool_size))))
-    CNN.add(layers.Conv2D(hp.Choice("nodes", nodes) * 2, (hp.Choice("kernel_size", kernel_size), hp.Choice("kernel_size", kernel_size)), activation = "leaky_relu", padding = "same"))
+    CNN.add(layers.Conv2D(hp.Choice("nodes", nodes) * 2, 
+                          (hp.Choice("kernel_size", kernel_size), hp.Choice("kernel_size", kernel_size)), 
+                          activation = hp.Choice("hidden_activation_function", hidden_fcn), 
+                          padding = "same"))
     CNN.add(layers.MaxPooling2D((hp.Choice("pool_size", pool_size), hp.Choice("pool_size", pool_size))))
-    CNN.add(layers.Conv2D(hp.Choice("nodes", nodes) * 4, (hp.Choice("kernel_size", kernel_size), hp.Choice("kernel_size", kernel_size)), activation = "leaky_relu", padding = "same"))
+    CNN.add(layers.Conv2D(hp.Choice("nodes", nodes) * 4, 
+                          (hp.Choice("kernel_size", kernel_size), hp.Choice("kernel_size", kernel_size)), 
+                          activation = hp.Choice("hidden_activation_function", hidden_fcn), 
+                          padding = "same"))
 
     CNN.add(layers.Flatten())
     #CNN.add(layers.Dense(hp.Choice("nodes", nodes) * 2, activation = "leaky_relu"))
     #CNN.add(layers.Dense(hp.Choice("nodes", nodes), activation = "leaky_relu"))
-    CNN.add(layers.Dense(1, activation = "sigmoid"))
+    CNN.add(layers.Dense(1, activation = hp.Choice("output_activation_function", output_fcn)))
     adam = Adam(learning_rate = hp.Choice("learning_rate", lr))
 
     CNN.compile(optimizer = adam, 
@@ -112,11 +123,11 @@ def tune_hyperparameters(training, testing, trials):
             
     tuner.search(x_train, 
                  y_train, 
-                 epochs = 100, 
+                 epochs = 40, 
                  validation_data = [x_test, y_test],
                  class_weight = weights)
     
-    tuner.results_summary(num_trials = 20)
+    tuner.results_summary(num_trials = 50)
     '''best_model = tuner.get_best_models()[0]
     best_params = tuner.get_best_hyperparameters(num_trials = 1)[0]
     for key, value in best_params.values.items():
@@ -140,7 +151,7 @@ training, testing = idft(waldo_images,
 
 
 
-tune_hyperparameters(training, testing, trials = 100)
+tune_hyperparameters(training, testing, trials = 20)
 CNN = build_model_final(18, 
                         5, 
                         3, 
