@@ -22,13 +22,17 @@ from sklearn.model_selection import StratifiedKFold as SKF
 
 import numpy as np
 
+# 35 nodes and over appear to cause the model to overfit
+# Best learning rate is around 0.01, but definitely needs further tuning because of model instability.
 
-
-nodes = [28, 30, 32, 34]
-kernel_size = [2, 3, 4]
-pool_size = [4, 5, 6, 7]
-lr = [0.005, 0.006, 0.007, 0.008, 0.009]
-hidden_fcn = ["leaky_relu", "elu", "relu", "selu", "silu", "hard_silu", "relu6"]
+nodes_1 = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+nodes_2 = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+kernel_size_1 = [2, 3, 4, 5, 6, 7, 8, 9]
+kernel_size_2 = [2, 3, 4, 5, 6, 7, 8, 9]
+pool_size_1 = [2, 3, 4, 5, 6, 7, 8, 9]
+pool_size_2 = [2, 3, 4, 5, 6, 7, 8, 9]
+lr = [0.00001, 0.0001, 0.001, 0.01]
+hidden_fcn = ["leaky_relu", "selu", "elu", "gelu", "silu", "relu6", "hard_silu"]
 output_fcn = ["sigmoid", "hard_sigmoid"]
 
 weights = {0: 1.108, 1: 10.226}
@@ -46,7 +50,7 @@ def build_model_final(num_nodes, kern, pool, learn):
     CNN.add(layers.MaxPooling2D((pool, pool)))
     CNN.add(layers.Conv2D(num_nodes * 2, (kern, kern), activation = "leaky_relu", padding = "same"))
     CNN.add(layers.MaxPooling2D((pool, pool)))
-    CNN.add(layers.Conv2D(num_nodes * 3, (kern, kern), activation = "leaky_relu", padding = "same"))
+    #CNN.add(layers.Conv2D(num_nodes * 3, (kern, kern), activation = "leaky_relu", padding = "same"))
 
     CNN.add(layers.Flatten())
     #CNN.add(layers.Dense(hp.Choice("nodes", nodes) * 2, activation = "leaky_relu"))
@@ -67,20 +71,21 @@ def build_model(hp):
     
     CNN = models.Sequential(name = "Waldo")
     CNN.add(layers.Input(shape = (256, 256, 3)))
-    CNN.add(layers.Conv2D(hp.Choice("nodes", nodes), 
-                          (hp.Choice("kernel_size", kernel_size), hp.Choice("kernel_size", kernel_size)), 
+    CNN.add(layers.Conv2D(hp.Choice("nodes_1", nodes_1), 
+                          (hp.Choice("kernel_size_1", kernel_size_1), hp.Choice("kernel_size_1", kernel_size_1)), 
                           activation = hp.Choice("hidden_activation_function", hidden_fcn), 
                           padding = "same"))
-    CNN.add(layers.MaxPooling2D((hp.Choice("pool_size", pool_size), hp.Choice("pool_size", pool_size))))
-    CNN.add(layers.Conv2D(hp.Choice("nodes", nodes) * 2, 
-                          (hp.Choice("kernel_size", kernel_size), hp.Choice("kernel_size", kernel_size)), 
+    CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_1", pool_size_1), hp.Choice("pool_size_1", pool_size_1))))
+    CNN.add(layers.Conv2D(hp.Choice("nodes_2", nodes_2), 
+                          (hp.Choice("kernel_size_2", kernel_size_2), hp.Choice("kernel_size_2", kernel_size_2)), 
                           activation = hp.Choice("hidden_activation_function", hidden_fcn), 
                           padding = "same"))
-    CNN.add(layers.MaxPooling2D((hp.Choice("pool_size", pool_size), hp.Choice("pool_size", pool_size))))
-    CNN.add(layers.Conv2D(hp.Choice("nodes", nodes) * 4, 
+    
+    CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_2", pool_size_2), hp.Choice("pool_size_2", pool_size_2))))
+    '''CNN.add(layers.Conv2D(hp.Choice("nodes", nodes) * 3, 
                           (hp.Choice("kernel_size", kernel_size), hp.Choice("kernel_size", kernel_size)), 
                           activation = hp.Choice("hidden_activation_function", hidden_fcn), 
-                          padding = "same"))
+                          padding = "same"))'''
 
     CNN.add(layers.Flatten())
     #CNN.add(layers.Dense(hp.Choice("nodes", nodes) * 2, activation = "leaky_relu"))
@@ -123,11 +128,11 @@ def tune_hyperparameters(training, testing, trials):
             
     tuner.search(x_train, 
                  y_train, 
-                 epochs = 40, 
+                 epochs = 32, 
                  validation_data = [x_test, y_test],
                  class_weight = weights)
     
-    tuner.results_summary(num_trials = 50)
+    tuner.results_summary(num_trials = 100)
     '''best_model = tuner.get_best_models()[0]
     best_params = tuner.get_best_hyperparameters(num_trials = 1)[0]
     for key, value in best_params.values.items():
@@ -151,17 +156,18 @@ training, testing = idft(waldo_images,
 
 
 
-tune_hyperparameters(training, testing, trials = 20)
-CNN = build_model_final(18, 
-                        5, 
+tune_hyperparameters(training, testing, trials = 300)
+CNN = build_model_final(21, 
                         3, 
-                        0.1)
-
+                        7, 
+                        0.012)
 '''CNN.fit(training, 
-        epochs = 100)
+        epochs = 100,
+        class_weight = weights)
 
 print("EVALUATION")
-CNN.evaluate(testing)'''
+CNN.evaluate(testing,
+             batch_size = 10)'''
 
 
 '''
