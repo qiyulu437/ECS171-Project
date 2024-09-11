@@ -1,6 +1,7 @@
 import os
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ['TF_XLA_FLAGS'] = "--tf_xla_auto_jit=2"  # Xcelerated Linear Algebra (XLA) helps reduce slow down during compilation by speeding up linear algebra calculations.
 
 import tensorflow as tf
 
@@ -12,6 +13,7 @@ from keras import layers, models
 from keras.utils import image_dataset_from_directory as idft
 from keras.optimizers import Adam
 from keras.preprocessing.sequence import pad_sequences as pad
+from keras.callbacks import EarlyStopping as ES
 
 import keras_tuner as kert
 
@@ -25,19 +27,24 @@ import numpy as np
 # 35 nodes and over appear to cause the model to overfit
 # Best learning rate is around 0.01, but definitely needs further tuning because of model instability.
 
-nodes_init = [32, 64]
-nodes_mid = [64, 128, 256]
-nodes_fin = [128, 256, 512]
-nodes_dense_1 = [256, 512]
-nodes_dense_2 = [64, 128, 256]
-kernel_size_1 = [2, 3, 4, 5, 6, 7]
-kernel_size_2 = [2, 3, 4, 5, 6, 7]
-kernel_size_3 = [2, 3, 4, 5, 6, 7]
+nodes_init = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+kernel_size_1 = [2, 3, 4, 5, 6, 7, 8, 9]
+hidden_fcn = ["relu"]
 pool_size_1 = [2, 3, 4, 5, 6, 7, 8, 9]
-pool_size_2 = [2, 3, 4, 5, 6, 7, 8, 9]
-lr = [0.0001, 0.001, 0.01]
-hidden_fcn = ["leaky_relu", "relu"]
+
+nodes_mid_1 = [128, 256]
+nodes_mid_2 = [128, 256]
+kernel_size_2 = [2, 3, 4, 5, 6, 7]
+nodes_fin = [64, 128, 256]
+kernel_size_3 = [2, 3, 4, 5, 6, 7, 8]
+
+pool_size_2 = [2, 3, 4, 5, 6, 7]
+nodes_dense_1 = [64, 128, 256]
+nodes_dense_2 = [64, 128]
 output_fcn = ["sigmoid"]
+
+lr = [0.00009, 0.0001, 0.00011]
+
 
 weights = {0: 1.108, 1: 10.226}
 
@@ -84,18 +91,18 @@ def build_model(hp):
     CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_1", pool_size_1), hp.Choice("pool_size_1", pool_size_1))))
 
     # Middle layers
-    CNN.add(layers.Conv2D(hp.Choice("nodes_mid", nodes_mid), 
+    CNN.add(layers.Conv2D(hp.Choice("nodes_mid_1", nodes_mid_1), 
                           (hp.Choice("kernel_size_2", kernel_size_2), hp.Choice("kernel_size_2", kernel_size_2)), 
                           activation = hp.Choice("hidden_activation_function", hidden_fcn), 
                           padding = "same"))
-    CNN.add(layers.Conv2D(hp.Choice("nodes_mid", nodes_mid), 
+    CNN.add(layers.Conv2D(hp.Choice("nodes_mid_2", nodes_mid_2), 
                           (hp.Choice("kernel_size_2", kernel_size_2), hp.Choice("kernel_size_2", kernel_size_2)), 
                           activation = hp.Choice("hidden_activation_function", hidden_fcn), 
                           padding = "same"))
 
     # Deep layer
     CNN.add(layers.Conv2D(hp.Choice("nodes_fin", nodes_fin), 
-                          (hp.Choice("kernel_size_3", kernel_size_3), hp.Choice("kernel_size", kernel_size_3)), 
+                          (hp.Choice("kernel_size_3", kernel_size_3), hp.Choice("kernel_size_3", kernel_size_3)), 
                           activation = hp.Choice("hidden_activation_function", hidden_fcn), 
                           padding = "same"))
     CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_2", pool_size_2), hp.Choice("pool_size_2", pool_size_2))))
@@ -138,12 +145,15 @@ def tune_hyperparameters(training, testing, trials):
         
     x_test = np.concatenate(x, axis = 0)
     y_test = np.concatenate(y, axis = 0)
+    
+    early_stop = ES(monitor = "val_f1_score", patience = 15, restore_best_weights = True)
             
     tuner.search(x_train, 
                  y_train, 
-                 epochs = 32, 
+                 epochs = 100, 
                  validation_data = [x_test, y_test],
-                 class_weight = weights)
+                 class_weight = weights,
+                 callbacks = [early_stop])
     
     tuner.results_summary(num_trials = 100)
     '''best_model = tuner.get_best_models()[0]
@@ -156,8 +166,13 @@ def tune_hyperparameters(training, testing, trials):
 waldo_images = r"256"
 original_images = r"original-images"
 
-keras.backend.clear_session()
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+    except RuntimeError as e:
+        print(e)
 
 training, testing = idft(waldo_images, 
                          validation_split = 0.3, 
@@ -166,11 +181,11 @@ training, testing = idft(waldo_images,
                          seed = 123, 
                          labels = "inferred", 
                          image_size = (256, 256), 
-                         batch_size = 10)
+                         batch_size = 64)
 
 
 
-tune_hyperparameters(training, testing, trials = 300)
+tune_hyperparameters(training, testing, trials = 50)
 CNN = build_model_final(21, 
                         3, 
                         7, 
@@ -187,13 +202,21 @@ CNN.evaluate(testing,
 '''
 
 '''
-Trial 29 summary
-Hyperparameters:
-nodes: 18
-kernel_size: 5
-pool_size: 3
-learning_rate: 0.1
-Score: 0.4285714030265808
+Value             |Best Value So Far |Hyperparameter
+32                |64                |nodes_init
+6                 |6                 |kernel_size_1
+leaky_relu        |relu              |hidden_activation_function
+3                 |8                 |pool_size_1
+128               |256               |nodes_mid
+3                 |2                 |kernel_size_2
+256               |128               |nodes_fin
+3                 |7                 |kernel_size_3
+9                 |2                 |pool_size_2
+256               |256               |nodes_dense_1
+64                |64                |nodes_dense_2
+sigmoid           |sigmoid           |output_activation_function
+0.0001            |0.0001            |learning_rate
+
 '''
 
 
