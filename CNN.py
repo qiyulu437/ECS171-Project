@@ -25,15 +25,19 @@ import numpy as np
 # 35 nodes and over appear to cause the model to overfit
 # Best learning rate is around 0.01, but definitely needs further tuning because of model instability.
 
-nodes_1 = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-nodes_2 = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-kernel_size_1 = [2, 3, 4, 5, 6, 7, 8, 9]
-kernel_size_2 = [2, 3, 4, 5, 6, 7, 8, 9]
+nodes_init = [32, 64]
+nodes_mid = [64, 128, 256]
+nodes_fin = [128, 256, 512]
+nodes_dense_1 = [256, 512]
+nodes_dense_2 = [64, 128, 256]
+kernel_size_1 = [2, 3, 4, 5, 6, 7]
+kernel_size_2 = [2, 3, 4, 5, 6, 7]
+kernel_size_3 = [2, 3, 4, 5, 6, 7]
 pool_size_1 = [2, 3, 4, 5, 6, 7, 8, 9]
 pool_size_2 = [2, 3, 4, 5, 6, 7, 8, 9]
-lr = [0.00001, 0.0001, 0.001, 0.01]
-hidden_fcn = ["leaky_relu", "selu", "elu", "gelu", "silu", "relu6", "hard_silu"]
-output_fcn = ["sigmoid", "hard_sigmoid"]
+lr = [0.0001, 0.001, 0.01]
+hidden_fcn = ["leaky_relu", "relu"]
+output_fcn = ["sigmoid"]
 
 weights = {0: 1.108, 1: 10.226}
 
@@ -71,25 +75,34 @@ def build_model(hp):
     
     CNN = models.Sequential(name = "Waldo")
     CNN.add(layers.Input(shape = (256, 256, 3)))
-    CNN.add(layers.Conv2D(hp.Choice("nodes_1", nodes_1), 
+    
+    # Starting layer
+    CNN.add(layers.Conv2D(hp.Choice("nodes_init", nodes_init), 
                           (hp.Choice("kernel_size_1", kernel_size_1), hp.Choice("kernel_size_1", kernel_size_1)), 
                           activation = hp.Choice("hidden_activation_function", hidden_fcn), 
                           padding = "same"))
     CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_1", pool_size_1), hp.Choice("pool_size_1", pool_size_1))))
-    CNN.add(layers.Conv2D(hp.Choice("nodes_2", nodes_2), 
+
+    # Middle layers
+    CNN.add(layers.Conv2D(hp.Choice("nodes_mid", nodes_mid), 
                           (hp.Choice("kernel_size_2", kernel_size_2), hp.Choice("kernel_size_2", kernel_size_2)), 
                           activation = hp.Choice("hidden_activation_function", hidden_fcn), 
                           padding = "same"))
-    
-    CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_2", pool_size_2), hp.Choice("pool_size_2", pool_size_2))))
-    '''CNN.add(layers.Conv2D(hp.Choice("nodes", nodes) * 3, 
-                          (hp.Choice("kernel_size", kernel_size), hp.Choice("kernel_size", kernel_size)), 
+    CNN.add(layers.Conv2D(hp.Choice("nodes_mid", nodes_mid), 
+                          (hp.Choice("kernel_size_2", kernel_size_2), hp.Choice("kernel_size_2", kernel_size_2)), 
                           activation = hp.Choice("hidden_activation_function", hidden_fcn), 
-                          padding = "same"))'''
+                          padding = "same"))
+
+    # Deep layer
+    CNN.add(layers.Conv2D(hp.Choice("nodes_fin", nodes_fin), 
+                          (hp.Choice("kernel_size_3", kernel_size_3), hp.Choice("kernel_size", kernel_size_3)), 
+                          activation = hp.Choice("hidden_activation_function", hidden_fcn), 
+                          padding = "same"))
+    CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_2", pool_size_2), hp.Choice("pool_size_2", pool_size_2))))
 
     CNN.add(layers.Flatten())
-    #CNN.add(layers.Dense(hp.Choice("nodes", nodes) * 2, activation = "leaky_relu"))
-    #CNN.add(layers.Dense(hp.Choice("nodes", nodes), activation = "leaky_relu"))
+    CNN.add(layers.Dense(hp.Choice("nodes_dense_1", nodes_dense_1), activation = hp.Choice("hidden_activation_function", hidden_fcn)))
+    CNN.add(layers.Dense(hp.Choice("nodes_dense_2", nodes_dense_2), activation = hp.Choice("hidden_activation_function", hidden_fcn)))
     CNN.add(layers.Dense(1, activation = hp.Choice("output_activation_function", output_fcn)))
     adam = Adam(learning_rate = hp.Choice("learning_rate", lr))
 
@@ -144,6 +157,7 @@ waldo_images = r"256"
 original_images = r"original-images"
 
 keras.backend.clear_session()
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 training, testing = idft(waldo_images, 
                          validation_split = 0.3, 
@@ -167,8 +181,10 @@ CNN = build_model_final(21,
 
 print("EVALUATION")
 CNN.evaluate(testing,
-             batch_size = 10)'''
-
+             batch_size = 10)
+             
+             
+'''
 
 '''
 Trial 29 summary
@@ -179,7 +195,6 @@ pool_size: 3
 learning_rate: 0.1
 Score: 0.4285714030265808
 '''
-
 
 
 
