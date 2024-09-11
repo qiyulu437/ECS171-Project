@@ -1,7 +1,7 @@
 import os
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-os.environ['TF_XLA_FLAGS'] = "--tf_xla_auto_jit=2"  # Xcelerated Linear Algebra (XLA) helps reduce slow down during compilation by speeding up linear algebra calculations.
+os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
 
 import tensorflow as tf
 
@@ -28,27 +28,28 @@ import numpy as np
 # Best learning rate is around 0.01, but definitely needs further tuning because of model instability.
 
 nodes_init = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-kernel_size_1 = [2, 3, 4, 5, 6, 7, 8, 9]
-hidden_fcn = ["relu"]
-pool_size_1 = [2, 3, 4, 5, 6, 7, 8, 9]
+kernel_size_1 = [3, 5, 7, 11]
+hidden_fcn = ["leaky_relu"]
+pool_size_1 = [2, 3]
 
-nodes_mid_1 = [128, 256]
-nodes_mid_2 = [128, 256]
-kernel_size_2 = [2, 3, 4, 5, 6, 7]
-nodes_fin = [64, 128, 256]
-kernel_size_3 = [2, 3, 4, 5, 6, 7, 8]
+nodes_mid_1 = [100, 120, 140, 160, 180, 200, 220, 240, 260]
+nodes_mid_2 = [100, 120, 140, 160, 180, 200, 220, 240, 260]
+kernel_size_2 = [3, 5, 7, 11]
+nodes_fin = [60, 80, 100, 120, 140, 160]
+kernel_size_3 = [3, 5, 7, 11]
 
-pool_size_2 = [2, 3, 4, 5, 6, 7]
-nodes_dense_1 = [64, 128, 256]
+pool_size_2 = [2, 3]
+nodes_dense_1 = [100, 120, 140, 160, 180, 200, 220, 240, 260, 280]
 nodes_dense_2 = [64, 128]
 output_fcn = ["sigmoid"]
 
-lr = [0.00009, 0.0001, 0.00011]
-
+lr = [0.001, 0.0015, 0.01, 0.015, 0.02]
+pool_size_3 = [2, 3]
 
 weights = {0: 1.108, 1: 10.226}
 
 f1_score = f1()
+
 
 def build_model_final(num_nodes, kern, pool, learn):
     # https://www.tensorflow.org/api_docs/python/tf/keras/preprocessing/image_dataset_from_directory
@@ -79,6 +80,7 @@ def build_model(hp):
     # https://www.tensorflow.org/api_docs/python/tf/keras/preprocessing/image_dataset_from_directory
     # Generate a tf.data.Dataset object from the 256 folder
     # Binary labeling of either waldo or not waldo
+    keras.backend.clear_session()
     
     CNN = models.Sequential(name = "Waldo")
     CNN.add(layers.Input(shape = (256, 256, 3)))
@@ -86,30 +88,30 @@ def build_model(hp):
     # Starting layer
     CNN.add(layers.Conv2D(hp.Choice("nodes_init", nodes_init), 
                           (hp.Choice("kernel_size_1", kernel_size_1), hp.Choice("kernel_size_1", kernel_size_1)), 
-                          activation = hp.Choice("hidden_activation_function", hidden_fcn), 
-                          padding = "same"))
+                          activation = hp.Choice("hidden_activation_function", hidden_fcn)))
+    
     CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_1", pool_size_1), hp.Choice("pool_size_1", pool_size_1))))
 
-    # Middle layers
+    # Middle layer
     CNN.add(layers.Conv2D(hp.Choice("nodes_mid_1", nodes_mid_1), 
                           (hp.Choice("kernel_size_2", kernel_size_2), hp.Choice("kernel_size_2", kernel_size_2)), 
-                          activation = hp.Choice("hidden_activation_function", hidden_fcn), 
-                          padding = "same"))
-    CNN.add(layers.Conv2D(hp.Choice("nodes_mid_2", nodes_mid_2), 
+                          activation = hp.Choice("hidden_activation_function", hidden_fcn)))
+    CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_2", pool_size_2), hp.Choice("pool_size_2", pool_size_2))))
+    '''CNN.add(layers.Conv2D(hp.Choice("nodes_mid_2", nodes_mid_2), 
                           (hp.Choice("kernel_size_2", kernel_size_2), hp.Choice("kernel_size_2", kernel_size_2)), 
                           activation = hp.Choice("hidden_activation_function", hidden_fcn), 
-                          padding = "same"))
+                          padding = "same"))'''
+    
 
     # Deep layer
     CNN.add(layers.Conv2D(hp.Choice("nodes_fin", nodes_fin), 
                           (hp.Choice("kernel_size_3", kernel_size_3), hp.Choice("kernel_size_3", kernel_size_3)), 
-                          activation = hp.Choice("hidden_activation_function", hidden_fcn), 
-                          padding = "same"))
-    CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_2", pool_size_2), hp.Choice("pool_size_2", pool_size_2))))
+                          activation = hp.Choice("hidden_activation_function", hidden_fcn)))
+    CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_3", pool_size_3), hp.Choice("pool_size_3", pool_size_3))))
 
     CNN.add(layers.Flatten())
     CNN.add(layers.Dense(hp.Choice("nodes_dense_1", nodes_dense_1), activation = hp.Choice("hidden_activation_function", hidden_fcn)))
-    CNN.add(layers.Dense(hp.Choice("nodes_dense_2", nodes_dense_2), activation = hp.Choice("hidden_activation_function", hidden_fcn)))
+    #CNN.add(layers.Dense(hp.Choice("nodes_dense_2", nodes_dense_2), activation = hp.Choice("hidden_activation_function", hidden_fcn)))
     CNN.add(layers.Dense(1, activation = hp.Choice("output_activation_function", output_fcn)))
     adam = Adam(learning_rate = hp.Choice("learning_rate", lr))
 
@@ -150,12 +152,12 @@ def tune_hyperparameters(training, testing, trials):
             
     tuner.search(x_train, 
                  y_train, 
-                 epochs = 100, 
+                 epochs = 50, 
                  validation_data = [x_test, y_test],
                  class_weight = weights,
                  callbacks = [early_stop])
     
-    tuner.results_summary(num_trials = 100)
+    tuner.results_summary(num_trials = 30)
     '''best_model = tuner.get_best_models()[0]
     best_params = tuner.get_best_hyperparameters(num_trials = 1)[0]
     for key, value in best_params.values.items():
@@ -166,13 +168,17 @@ def tune_hyperparameters(training, testing, trials):
 waldo_images = r"256"
 original_images = r"original-images"
 
+# Focusing on optimizng learning process and improving stability.
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
     try:
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
+            tf.config.set_visible_devices(gpus[0], 'GPU')
     except RuntimeError as e:
         print(e)
+        
+tf.config.optimizer.set_jit(True)
 
 training, testing = idft(waldo_images, 
                          validation_split = 0.3, 
@@ -181,11 +187,11 @@ training, testing = idft(waldo_images,
                          seed = 123, 
                          labels = "inferred", 
                          image_size = (256, 256), 
-                         batch_size = 64)
+                         batch_size = 1)
 
 
 
-tune_hyperparameters(training, testing, trials = 50)
+tune_hyperparameters(training, testing, trials = 100)
 CNN = build_model_final(21, 
                         3, 
                         7, 
