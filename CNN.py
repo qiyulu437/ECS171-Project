@@ -1,7 +1,8 @@
 import os
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'  
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'  
 
 import tensorflow as tf
 
@@ -28,15 +29,15 @@ import numpy as np
 # Best learning rate is around 0.01, but definitely needs further tuning because of model instability.
 
 nodes_init = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-kernel_size_1 = [3, 5, 7, 11]
+kernel_size_1 = [1, 3, 5, 7]
 hidden_fcn = ["leaky_relu"]
 pool_size_1 = [2, 3]
 
 nodes_mid_1 = [100, 120, 140, 160, 180, 200, 220, 240, 260]
 nodes_mid_2 = [100, 120, 140, 160, 180, 200, 220, 240, 260]
-kernel_size_2 = [3, 5, 7, 11]
+kernel_size_2 = [1, 3, 5, 7]
 nodes_fin = [60, 80, 100, 120, 140, 160]
-kernel_size_3 = [3, 5, 7, 11]
+kernel_size_3 = [1, 3, 5, 7]
 
 pool_size_2 = [2, 3]
 nodes_dense_1 = [100, 120, 140, 160, 180, 200, 220, 240, 260, 280]
@@ -79,9 +80,7 @@ def build_model_final(num_nodes, kern, pool, learn):
 def build_model(hp):
     # https://www.tensorflow.org/api_docs/python/tf/keras/preprocessing/image_dataset_from_directory
     # Generate a tf.data.Dataset object from the 256 folder
-    # Binary labeling of either waldo or not waldo
-    keras.backend.clear_session()
-    
+    # Binary labeling of either waldo or not waldo    
     CNN = models.Sequential(name = "Waldo")
     CNN.add(layers.Input(shape = (256, 256, 3)))
     
@@ -109,6 +108,8 @@ def build_model(hp):
                           activation = hp.Choice("hidden_activation_function", hidden_fcn)))
     CNN.add(layers.MaxPooling2D((hp.Choice("pool_size_3", pool_size_3), hp.Choice("pool_size_3", pool_size_3))))
 
+    CNN.add(layers.GlobalAveragePooling2D())
+    # Dense layer
     CNN.add(layers.Flatten())
     CNN.add(layers.Dense(hp.Choice("nodes_dense_1", nodes_dense_1), activation = hp.Choice("hidden_activation_function", hidden_fcn)))
     #CNN.add(layers.Dense(hp.Choice("nodes_dense_2", nodes_dense_2), activation = hp.Choice("hidden_activation_function", hidden_fcn)))
@@ -117,7 +118,8 @@ def build_model(hp):
 
     CNN.compile(optimizer = adam, 
                 loss = tf.keras.losses.BinaryCrossentropy(),
-                metrics = ["accuracy", "precision", "recall", f1_score])
+                metrics = ["accuracy", "precision", "recall", f1_score],
+                jit_compile = False)
     
     return CNN
 
@@ -170,15 +172,18 @@ original_images = r"original-images"
 
 # Focusing on optimizng learning process and improving stability.
 gpus = tf.config.list_physical_devices('GPU')
+print(f"Available gpus: {len(gpus)}")
 if gpus:
     try:
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
-            tf.config.set_visible_devices(gpus[0], 'GPU')
+            tf.config.experimental.set_virtual_device_configuration(gpu,
+                                                                    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=4096)])
     except RuntimeError as e:
         print(e)
         
-tf.config.optimizer.set_jit(True)
+tf.config.optimizer.set_jit("autoclustering")
+keras.mixed_precision.set_global_policy(keras.mixed_precision.Policy("mixed_float16"))
 
 training, testing = idft(waldo_images, 
                          validation_split = 0.3, 
